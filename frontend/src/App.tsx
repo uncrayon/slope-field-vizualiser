@@ -20,6 +20,16 @@ export default function App() {
   const [status, setStatus] = useState<string | null>(null);
   const [results, setResults] = useState<ResultData | null>(null);
   const [viewMode, setViewMode] = useState<"2D" | "3D">("2D");
+  const [xMin, setXMin] = useState<number>(-10);
+  const [xMax, setXMax] = useState<number>(10);
+  const [yMin, setYMin] = useState<number>(-10);
+  const [yMax, setYMax] = useState<number>(10);
+  const [zMin, setZMin] = useState<number>(-10);
+  const [zMax, setZMax] = useState<number>(10);
+  const [showSlopeField, setShowSlopeField] = useState<boolean>(true);
+  const [slopeFieldData, setSlopeFieldData] = useState<any>(null);
+  const [gridSize, setGridSize] = useState<number>(30);
+  const [arrowLength, setArrowLength] = useState<number>(0.15);
 
   // WebSocket hook will connect and forward messages for the current jobId
   useWebSocket(jobId, (msg) => {
@@ -45,6 +55,29 @@ export default function App() {
       setStatus("queued");
     }
   }, [jobId]);
+
+  useEffect(() => {
+    const fetchSlopeField = async () => {
+      if (!equation.trim()) return;
+      try {
+        const payload = {
+          equations: equation,
+          x_min: xMin,
+          x_max: xMax,
+          y_min: yMin,
+          y_max: yMax,
+          grid_size: gridSize,
+          ...(viewMode === "3D" ? { z_min: zMin, z_max: zMax } : {}),
+        };
+        const resp = await axios.post("/slope_field", payload);
+        setSlopeFieldData(resp.data);
+      } catch (e: any) {
+        console.error("Slope field fetch failed:", e);
+        setSlopeFieldData(null);
+      }
+    };
+    fetchSlopeField();
+  }, [equation, xMin, xMax, yMin, yMax, zMin, zMax, viewMode, gridSize]);
 
   const submit = async () => {
     try {
@@ -132,6 +165,85 @@ export default function App() {
             />
           </div>
 
+          <div className="ranges">
+            <label>Ranges</label>
+            <div>
+              <label>x_min</label>
+              <input
+                type="number"
+                value={xMin}
+                onChange={(e) => setXMin(Number(e.target.value))}
+              />
+              <label>x_max</label>
+              <input
+                type="number"
+                value={xMax}
+                onChange={(e) => setXMax(Number(e.target.value))}
+              />
+            </div>
+            <div>
+              <label>y_min</label>
+              <input
+                type="number"
+                value={yMin}
+                onChange={(e) => setYMin(Number(e.target.value))}
+              />
+              <label>y_max</label>
+              <input
+                type="number"
+                value={yMax}
+                onChange={(e) => setYMax(Number(e.target.value))}
+              />
+            </div>
+            {viewMode === "3D" && (
+              <div>
+                <label>z_min</label>
+                <input
+                  type="number"
+                  value={zMin}
+                  onChange={(e) => setZMin(Number(e.target.value))}
+                />
+                <label>z_max</label>
+                <input
+                  type="number"
+                  value={zMax}
+                  onChange={(e) => setZMax(Number(e.target.value))}
+                />
+              </div>
+            )}
+            <div>
+              <label>Grid density</label>
+              <input
+                type="number"
+                value={gridSize}
+                onChange={(e) => setGridSize(Number(e.target.value))}
+                min="10"
+                max="50"
+              />
+            </div>
+            <div>
+              <label>Arrow length</label>
+              <input
+                type="number"
+                value={arrowLength}
+                onChange={(e) => setArrowLength(Number(e.target.value))}
+                min="0.05"
+                max="0.5"
+                step="0.01"
+              />
+            </div>
+            <div>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showSlopeField}
+                  onChange={(e) => setShowSlopeField(e.target.checked)}
+                />
+                Show slope field
+              </label>
+            </div>
+          </div>
+
           <div className="actions">
             <button onClick={submit}>Submit</button>
             <button onClick={pollStatus} disabled={!jobId}>
@@ -154,15 +266,15 @@ export default function App() {
         </section>
 
         <section className="visualization">
-          {!results && <div className="placeholder">No results yet</div>}
-
-          {results && viewMode === "2D" && (
-            <PlotlyChart data={results} />
+          {viewMode === "2D" && (
+            <PlotlyChart data={results || { trajectories: [], meta: {} }} slopeFieldData={slopeFieldData} showSlopeField={showSlopeField} xMin={xMin} xMax={xMax} yMin={yMin} yMax={yMax} arrowLength={arrowLength} />
           )}
 
-          {results && viewMode === "3D" && (
+          {viewMode === "3D" && results && (
             <ThreeScene data={results} />
           )}
+
+          {!results && viewMode === "3D" && <div className="placeholder">No results yet</div>}
         </section>
       </main>
 
