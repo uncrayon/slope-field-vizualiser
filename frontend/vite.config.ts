@@ -27,6 +27,10 @@ export default defineConfig({
         target: "http://localhost:8000",
         changeOrigin: true,
       },
+      "/slope_field": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
       // WebSocket endpoint (backend exposes /ws/{job_id})
       "/ws": {
         target: "ws://localhost:8000",

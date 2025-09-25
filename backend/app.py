@@ -2,12 +2,14 @@ from fastapi import FastAPI, HTTPException, WebSocket, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uuid
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
 from pathlib import Path
 import logging
+import numpy as np
 from .validation import validate_job_request
 from .db import init_db, save_job_request
 from .worker.manager import enqueue_job
+from .parser.parser import MathematicaParser
 
 app = FastAPI(title="Equation Phase Portrait Tool API")
  
@@ -59,6 +61,16 @@ class JobRequest(BaseModel):
     projection: List[int] = []
     animate: bool = False
 
+class SlopeFieldRequest(BaseModel):
+    equations: str
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
+    z_min: Optional[float] = None
+    z_max: Optional[float] = None
+    grid_size: int = 30
+
 jobs = {}
 
 @app.get("/health")
@@ -93,6 +105,61 @@ def job_results(job_id:str):
     if job_id not in jobs or "result" not in jobs[job_id]:
         raise HTTPException(404,"result not found")
     return jobs[job_id]["result"]
+
+@app.post("/slope_field")
+def compute_slope_field(req: SlopeFieldRequest):
+    try:
+        parser = MathematicaParser()
+        f, state_vars = parser.parse(req.equations)
+        num_vars = len(state_vars)
+        if num_vars == 2:
+            # 2D
+            x = np.linspace(req.x_min, req.x_max, req.grid_size)
+            y = np.linspace(req.y_min, req.y_max, req.grid_size)
+            X, Y = np.meshgrid(x, y)
+            X_flat = X.flatten()
+            Y_flat = Y.flatten()
+            U = []
+            V = []
+            for i in range(len(X_flat)):
+                vec = f(0, np.array([X_flat[i], Y_flat[i]]), {})
+                U.append(vec[0])
+                V.append(vec[1])
+            return {
+                "x": X_flat.tolist(),
+                "y": Y_flat.tolist(),
+                "u": U,
+                "v": V
+            }
+        elif num_vars == 3 and req.z_min is not None and req.z_max is not None:
+            # 3D
+            x = np.linspace(req.x_min, req.x_max, req.grid_size)
+            y = np.linspace(req.y_min, req.y_max, req.grid_size)
+            z = np.linspace(req.z_min, req.z_max, req.grid_size)
+            X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
+            X_flat = X.flatten()
+            Y_flat = Y.flatten()
+            Z_flat = Z.flatten()
+            U = []
+            V = []
+            W = []
+            for i in range(len(X_flat)):
+                vec = f(0, np.array([X_flat[i], Y_flat[i], Z_flat[i]]), {})
+                U.append(vec[0])
+                V.append(vec[1])
+                W.append(vec[2])
+            return {
+                "x": X_flat.tolist(),
+                "y": Y_flat.tolist(),
+                "z": Z_flat.tolist(),
+                "u": U,
+                "v": V,
+                "w": W
+            }
+        else:
+            raise HTTPException(400, "Unsupported number of variables or missing z range for 3D")
+    except Exception as e:
+        raise HTTPException(400, str(e))
 
 @app.websocket("/ws/{job_id}")
 async def ws_endpoint(websocket: WebSocket, job_id:str):
