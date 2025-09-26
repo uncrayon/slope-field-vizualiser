@@ -157,173 +157,263 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Equation Phase Portrait Tool</h1>
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <span />
+          </span>
+          <div>
+            <h1>Slope Field Studio</h1>
+            <p>Elegantly explore dynamical systems</p>
+          </div>
+        </div>
+
+        <div className="header-status" role="status">
+          <span className="status-label">Status</span>
+          <span className={`status-pill ${status ?? "idle"}`}>
+            {status ?? "idle"}
+          </span>
+          <span className="status-job">Job {jobId ?? "—"}</span>
+        </div>
       </header>
 
       <main className="app-main">
-        <aside className="editor-panel">
-          <label>Equations (Mathematica-like)</label>
-          <MonacoEditor
-            value={equation}
-            language="plaintext"
-            onChange={(v) => setEquation(v)}
-          />
-          <label>Name (optional)</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Enter a name for the plot"
-          />
-        </aside>
-
-        <section className="controls">
-          <div className="timespan">
-            <label>t0</label>
+        <div className="side-panel">
+          <section className="panel editor-panel">
+            <div className="panel-header">
+              <h2>Equation</h2>
+              <p>Describe your system using Mathematica-like syntax.</p>
+            </div>
+            <label className="field-label" htmlFor="equation-editor">
+              Differential relations
+            </label>
+            <MonacoEditor
+              value={equation}
+              language="plaintext"
+              onChange={(v) => setEquation(v)}
+              options={{ fontSize: 14 }}
+              id="equation-editor"
+            />
+            <label className="field-label" htmlFor="plot-name">
+              Presentation name
+            </label>
             <input
-              type="number"
-              value={t0}
-              onChange={(e) => setT0(Number(e.target.value))}
+              id="plot-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Phase portrait name"
             />
-            <label>tf</label>
-            <input
-              type="number"
-              value={tf}
-              onChange={(e) => setTf(Number(e.target.value))}
-            />
-          </div>
+          </section>
 
-          <div>
-            <label>Initial conditions (CSV lines)</label>
-            <textarea
-              className="ics"
-              value={icsText}
-              onChange={(e) => setIcsText(e.target.value)}
-            />
-          </div>
+          <section className="panel control-panel">
+            <div className="panel-header">
+              <h2>Parameters</h2>
+              <p>Tune the time span, initial conditions, and rendering options.</p>
+            </div>
 
-          <div className="ranges">
-            <label>Ranges</label>
-            <div>
-              <label>x_min</label>
+            <div className="field-grid timespan">
+              <label className="field-label" htmlFor="t0">
+                Start (t₀)
+              </label>
               <input
+                id="t0"
                 type="number"
-                value={xMin}
-                onChange={(e) => setXMin(Number(e.target.value))}
+                value={t0}
+                onChange={(e) => setT0(Number(e.target.value))}
               />
-              <label>x_max</label>
+              <label className="field-label" htmlFor="tf">
+                End (t_f)
+              </label>
               <input
+                id="tf"
                 type="number"
-                value={xMax}
-                onChange={(e) => setXMax(Number(e.target.value))}
+                value={tf}
+                onChange={(e) => setTf(Number(e.target.value))}
               />
             </div>
-            <div>
-              <label>y_min</label>
-              <input
-                type="number"
-                value={yMin}
-                onChange={(e) => setYMin(Number(e.target.value))}
-              />
-              <label>y_max</label>
-              <input
-                type="number"
-                value={yMax}
-                onChange={(e) => setYMax(Number(e.target.value))}
+
+            <div className="stack">
+              <label className="field-label" htmlFor="ics">
+                Initial conditions (CSV)
+              </label>
+              <textarea
+                id="ics"
+                className="ics"
+                value={icsText}
+                onChange={(e) => setIcsText(e.target.value)}
               />
             </div>
-            {viewMode === "3D" && (
-              <div>
-                <label>z_min</label>
+
+            <div className="ranges">
+              <div className="range-header">
+                <h3>Domain</h3>
+                <button
+                  type="button"
+                  className="view-toggle"
+                  onClick={() => {
+                    setViewMode((m) => (m === "2D" ? "3D" : "2D"));
+                  }}
+                  title="Toggle 2D / 3D view"
+                >
+                  {viewMode === "2D" ? "Switch to 3D" : "Switch to 2D"}
+                </button>
+              </div>
+              <div className="field-grid">
+                <label className="field-label" htmlFor="x-min">
+                  x min
+                </label>
                 <input
+                  id="x-min"
                   type="number"
-                  value={zMin}
-                  onChange={(e) => setZMin(Number(e.target.value))}
+                  value={xMin}
+                  onChange={(e) => setXMin(Number(e.target.value))}
                 />
-                <label>z_max</label>
+                <label className="field-label" htmlFor="x-max">
+                  x max
+                </label>
                 <input
+                  id="x-max"
                   type="number"
-                  value={zMax}
-                  onChange={(e) => setZMax(Number(e.target.value))}
+                  value={xMax}
+                  onChange={(e) => setXMax(Number(e.target.value))}
                 />
               </div>
-            )}
-            <div>
-              <label>Grid density</label>
-              <input
-                type="number"
-                value={gridSize}
-                onChange={(e) => setGridSize(Number(e.target.value))}
-                min="10"
-                max="50"
-              />
-            </div>
-            <div>
-              <label>Arrow length</label>
-              <input
-                type="number"
-                value={arrowLength}
-                onChange={(e) => setArrowLength(Number(e.target.value))}
-                min="0.05"
-                max="0.5"
-                step="0.01"
-              />
-            </div>
-            <div>
-              <label>
+              <div className="field-grid">
+                <label className="field-label" htmlFor="y-min">
+                  y min
+                </label>
+                <input
+                  id="y-min"
+                  type="number"
+                  value={yMin}
+                  onChange={(e) => setYMin(Number(e.target.value))}
+                />
+                <label className="field-label" htmlFor="y-max">
+                  y max
+                </label>
+                <input
+                  id="y-max"
+                  type="number"
+                  value={yMax}
+                  onChange={(e) => setYMax(Number(e.target.value))}
+                />
+              </div>
+              {viewMode === "3D" && (
+                <div className="field-grid">
+                  <label className="field-label" htmlFor="z-min">
+                    z min
+                  </label>
+                  <input
+                    id="z-min"
+                    type="number"
+                    value={zMin}
+                    onChange={(e) => setZMin(Number(e.target.value))}
+                  />
+                  <label className="field-label" htmlFor="z-max">
+                    z max
+                  </label>
+                  <input
+                    id="z-max"
+                    type="number"
+                    value={zMax}
+                    onChange={(e) => setZMax(Number(e.target.value))}
+                  />
+                </div>
+              )}
+              <div className="field-grid">
+                <label className="field-label" htmlFor="grid">
+                  Grid density
+                </label>
+                <input
+                  id="grid"
+                  type="number"
+                  value={gridSize}
+                  onChange={(e) => setGridSize(Number(e.target.value))}
+                  min="10"
+                  max="50"
+                />
+                <label className="field-label" htmlFor="arrow-length">
+                  Arrow length
+                </label>
+                <input
+                  id="arrow-length"
+                  type="number"
+                  value={arrowLength}
+                  onChange={(e) => setArrowLength(Number(e.target.value))}
+                  min="0.05"
+                  max="0.5"
+                  step="0.01"
+                />
+              </div>
+              <label className="switch">
                 <input
                   type="checkbox"
                   checked={showSlopeField}
                   onChange={(e) => setShowSlopeField(e.target.checked)}
                 />
-                Show slope field
+                <span>Show slope field overlay</span>
               </label>
             </div>
-          </div>
 
-          <div className="actions">
-            <button onClick={submit}>Submit</button>
-            <button onClick={pollStatus} disabled={!jobId}>
-              Check Status
-            </button>
-            <button
-              onClick={() => {
-                setViewMode((m) => (m === "2D" ? "3D" : "2D"));
-              }}
-              title="Toggle 2D / 3D view"
-            >
-              Toggle {viewMode}
-            </button>
-          </div>
+            <div className="actions">
+              <button className="primary" onClick={submit}>
+                Render portrait
+              </button>
+              <button className="secondary" onClick={pollStatus} disabled={!jobId}>
+                Check status
+              </button>
+            </div>
 
-          <div className="status">
-            <strong>Job:</strong> {jobId ?? "—"} <strong>Status:</strong>{" "}
-            {status ?? "—"}
-            {errorMessage && <div className="status-error">{errorMessage}</div>}
-            {warnings.length > 0 && (
-              <ul className="status-warning">
-                {warnings.map((w, idx) => (
-                  <li key={idx}>{w}</li>
-                ))}
-              </ul>
+            {(errorMessage || warnings.length > 0) && (
+              <div className="feedback">
+                {errorMessage && <p className="error">{errorMessage}</p>}
+                {warnings.length > 0 && (
+                  <ul className="warning-list">
+                    {warnings.map((w, idx) => (
+                      <li key={idx}>{w}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
+          </section>
+        </div>
+
+        <section className="panel visualization">
+          <div className="panel-header">
+            <h2>{viewMode === "2D" ? "Phase portrait" : "3D trajectory"}</h2>
+            <p>
+              {viewMode === "2D"
+                ? "Interact with the slope field and simulated trajectories."
+                : "Explore the 3D motion with pinch and drag gestures."}
+            </p>
           </div>
-        </section>
 
-        <section className="visualization">
           {viewMode === "2D" && (
-            <PlotlyChart data={results || { trajectories: [], meta: {} }} slopeFieldData={slopeFieldData} showSlopeField={showSlopeField} xMin={xMin} xMax={xMax} yMin={yMin} yMax={yMax} arrowLength={arrowLength} />
+            <PlotlyChart
+              data={results || { trajectories: [], meta: {} }}
+              slopeFieldData={slopeFieldData}
+              showSlopeField={showSlopeField}
+              xMin={xMin}
+              xMax={xMax}
+              yMin={yMin}
+              yMax={yMax}
+              arrowLength={arrowLength}
+            />
           )}
 
-          {viewMode === "3D" && results && (
-            <ThreeScene data={results} />
-          )}
+          {viewMode === "3D" && results && <ThreeScene data={results} />}
 
-          {!results && viewMode === "3D" && <div className="placeholder">No results yet</div>}
+          {!results && viewMode === "3D" && (
+            <div className="placeholder">No results yet</div>
+          )}
         </section>
       </main>
 
-      <footer className="app-footer">Built for interactive ODE exploration</footer>
+      <footer className="app-footer">
+        <span>Built for interactive ODE exploration</span>
+        <span className="footer-meta">Crafted with precision mathematics</span>
+      </footer>
     </div>
   );
 }

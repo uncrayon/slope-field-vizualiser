@@ -40,6 +40,10 @@ type MonacoEditorProps = {
   language?: string;
   onChange?: (v: string) => void;
   height?: string;
+  options?: Record<string, unknown>;
+  id?: string;
+  className?: string;
+  "aria-label"?: string;
 };
 
 const MonacoEditor: React.FC<MonacoEditorProps> = ({
@@ -47,6 +51,10 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
   language = "javascript",
   onChange,
   height = "220px",
+  options,
+  id,
+  className,
+  "aria-label": ariaLabel,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // editorRef typed as any because we import monaco dynamically
@@ -69,6 +77,10 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
           automaticLayout: true,
           minimap: { enabled: false },
           theme: "vs-light",
+          fontSize: 15,
+          roundedSelection: true,
+          scrollbar: { useShadows: false },
+          ...options,
         });
 
         const ed = editorRef.current!;
@@ -110,7 +122,21 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     if (ed.getValue() !== value) ed.setValue(value);
   }, [value]);
 
-  return <div ref={containerRef} style={{ height, border: "1px solid #ddd" }} />;
+  return (
+    <div
+      ref={containerRef}
+      id={id}
+      aria-label={ariaLabel}
+      className={className}
+      style={{
+        height,
+        borderRadius: "14px",
+        border: "1px solid rgba(15, 23, 42, 0.12)",
+        overflow: "hidden",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.4)",
+      }}
+    />
+  );
 };
 
 export default MonacoEditor;
