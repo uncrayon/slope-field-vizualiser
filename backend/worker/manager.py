@@ -21,6 +21,7 @@ from backend.db import save_job_result, update_job_status, save_job_request
 from backend.parser.parser import MathematicaParser, ParseError
 from backend.solvers.scipy_solver import ScipySolver
 from backend.solvers.numba_runner import NumbaRunner
+from backend.solvers.abstract_solver import SolverError
 from backend.ws import broadcast
 
 
@@ -66,6 +67,17 @@ def _schedule_broadcast(job_id: str, message: Dict[str, Any]) -> None:
         except Exception as e:
             logging.getLogger(__name__).exception("Failed to run broadcast for job %s: %s", job_id, e)
 
+
+def _broadcast_status(job_id: str, status: str, **extra: Any) -> None:
+    payload = {"job_id": job_id, "status": status}
+    if extra:
+        payload.update(extra)
+    _schedule_broadcast(job_id, {"type": "status", "payload": payload})
+
+
+def _broadcast_results(job_id: str, result: Dict[str, Any]) -> None:
+    _schedule_broadcast(job_id, {"type": "results", "payload": result})
+
 def enqueue_job(job_id: str, request: Dict[str, Any]) -> None:
     """
     Entry point used by FastAPI BackgroundTasks to run a submitted job.
@@ -100,7 +112,10 @@ def enqueue_job(job_id: str, request: Dict[str, Any]) -> None:
         save_job_request(job_id, request)
         update_job_status(job_id, "running")
         jobs[job_id]["status"] = "running"
-        _schedule_broadcast(job_id, {"status": "running", "job_id": job_id})
+        jobs[job_id].pop("error", None)
+        jobs[job_id].pop("error_details", None)
+        jobs[job_id].pop("warnings", None)
+        _broadcast_status(job_id, "running")
 
         parser = MathematicaParser()
         try:
@@ -111,7 +126,7 @@ def enqueue_job(job_id: str, request: Dict[str, Any]) -> None:
             jobs[job_id]["status"] = "failed"
             jobs[job_id]["error"] = str(e)
             save_job_result(job_id, {"job_id": job_id, "error": f"parser failure: {e}"})
-            _schedule_broadcast(job_id, {"status": "failed", "job_id": job_id, "error": str(e)})
+            _broadcast_status(job_id, "failed", error=str(e))
             with open(marker_path, "a", encoding="utf-8") as f:
                 f.write(f"FAILED_PARSE {job_id}\n")
             return
@@ -133,13 +148,33 @@ def enqueue_job(job_id: str, request: Dict[str, Any]) -> None:
         ics = np.asarray(request["initial_conditions"], dtype=float)
 
         # run batch solve (solver returns (times, trajectories))
-        times, trajs = solver.solve_batch(
-            func,
-            (t0, tf),
-            ics,
-            params=request.get("parameters", {}) or {},
-            t_eval=t_eval,
-        )
+        try:
+            times, trajs = solver.solve_batch(
+                func,
+                (t0, tf),
+                ics,
+                params=request.get("parameters", {}) or {},
+                t_eval=t_eval,
+            )
+        except SolverError as err:
+            logger.warning("Solver failure for job %s: %s", job_id, err)
+            update_job_status(job_id, "failed")
+            jobs[job_id]["status"] = "failed"
+            jobs[job_id]["error"] = str(err)
+            if getattr(err, "details", None):
+                jobs[job_id]["error_details"] = err.details
+            save_job_result(
+                job_id,
+                {
+                    "job_id": job_id,
+                    "error": str(err),
+                    "details": getattr(err, "details", {}),
+                },
+            )
+            _broadcast_status(job_id, "failed", error=str(err), details=getattr(err, "details", {}))
+            with open(marker_path, "a", encoding="utf-8") as f:
+                f.write(f"FAILED_SOLVER {job_id}\n")
+            return
 
         result = _format_result(times, trajs)
         result["meta"] = {
@@ -160,7 +195,8 @@ def enqueue_job(job_id: str, request: Dict[str, Any]) -> None:
         jobs[job_id]["status"] = "finished"
         jobs[job_id]["result"] = result
         logger.info("Job %s finished; broadcasting result", job_id)
-        _schedule_broadcast(job_id, {"status": "finished", "job_id": job_id, "result": result})
+        _broadcast_status(job_id, "finished")
+        _broadcast_results(job_id, result)
         try:
             with open(marker_path, "a", encoding="utf-8") as f:
                 f.write(f"FINISHED {job_id}\n")
@@ -174,7 +210,10 @@ def enqueue_job(job_id: str, request: Dict[str, Any]) -> None:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["error"] = str(e)
         save_job_result(job_id, {"job_id": job_id, "error": str(e), "traceback": tb})
-        _schedule_broadcast(job_id, {"status": "failed", "job_id": job_id, "error": str(e)})
+        extra = {}
+        if isinstance(e, SolverError):
+            extra["details"] = getattr(e, "details", {})
+        _broadcast_status(job_id, "failed", error=str(e), **extra)
         try:
             with open(marker_path, "a", encoding="utf-8") as f:
                 f.write(f"EXCEPTION {job_id}\n")

@@ -63,6 +63,23 @@ class AbstractSolver:
         """
         raise NotImplementedError("Abstract method - implement in subclass")
 
+
+class SolverError(RuntimeError):
+    """Exception raised when a numerical solver cannot finish the integration."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        details: Optional[Dict[str, Any]] = None,
+        times: Optional[np.ndarray] = None,
+        trajectory: Optional[np.ndarray] = None,
+    ) -> None:
+        super().__init__(message)
+        self.details = details or {}
+        self.times = times
+        self.trajectory = trajectory
+
     def solve_batch(
         self,
         func: Callable[[float, np.ndarray, Dict[str, float]], np.ndarray],

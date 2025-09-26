@@ -5,7 +5,7 @@ try:
     # normal package-relative import (works when running as a package)
     try:
         # normal package-relative import (works when running as a package)
-        from .abstract_solver import AbstractSolver, IntegratorOptions
+        from .abstract_solver import AbstractSolver, IntegratorOptions, SolverError
     except Exception:
         # fallback when module is executed directly (e.g. from tests that import by path)
         import importlib.util
@@ -21,6 +21,7 @@ try:
         spec.loader.exec_module(_module)  # type: ignore
         AbstractSolver = _module.AbstractSolver
         IntegratorOptions = _module.IntegratorOptions
+        SolverError = _module.SolverError
 except Exception:
     # fallback when module is executed directly (e.g. from tests that import by path)
     import importlib.util
@@ -33,6 +34,7 @@ except Exception:
     spec.loader.exec_module(_module)  # type: ignore
     AbstractSolver = _module.AbstractSolver
     IntegratorOptions = _module.IntegratorOptions
+    SolverError = _module.SolverError
 
 
 class ScipySolver(AbstractSolver):
@@ -99,16 +101,61 @@ class ScipySolver(AbstractSolver):
         if max_step is not None:
             solve_kwargs["max_step"] = max_step
 
-        sol = solve_ivp(**solve_kwargs)
+        try:
+            sol = solve_ivp(**solve_kwargs)
+        except Exception as exc:  # SciPy may raise ValueError/RuntimeError directly
+            solver_message = str(exc)
+            friendly = self._format_failure_message(solver_message, None)
+            raise SolverError(
+                friendly,
+                details={"solver_message": solver_message, "backend": "scipy"},
+            ) from exc
 
         if not sol.success:
-            # still return what we have with an exception-like behavior by raising
-            raise RuntimeError(f"SciPy solver failed: {sol.message}")
+            solver_message = (sol.message or "").strip()
+            friendly = self._format_failure_message(solver_message, sol)
+            trajectory = sol.y.T.copy() if sol.y.size else None
+            raise SolverError(
+                friendly,
+                details={
+                    "solver_message": solver_message,
+                    "backend": "scipy",
+                    "t_stop": float(sol.t[-1]) if sol.t.size else None,
+                },
+                times=sol.t.copy() if sol.t.size else None,
+                trajectory=trajectory,
+            )
 
         # sol.y has shape (ndim, nt) -> transpose to (nt, ndim)
         times = sol.t
         traj = sol.y.T
         return times, traj
+
+    @staticmethod
+    def _format_failure_message(message: str, sol: Optional[Any]) -> str:
+        base = "SciPy integrator could not complete the integration."
+        if not message:
+            return base
+
+        message_lower = message.lower()
+        if "required step size is less than spacing between numbers" in message_lower:
+            detail = (
+                " The system became extremely stiff or diverged, so the adaptive step size"
+                " hit machine precision. Try reducing the integration interval, choosing a"
+                " different method (e.g. 'Radau'), or scaling the equations."
+            )
+            if sol is not None and sol.t.size:
+                t_last = float(sol.t[-1])
+                detail += f" The solver stopped near t = {t_last:.6g}."
+        elif "overflow" in message_lower or "nan" in message_lower:
+            detail = (
+                " Numerical overflow or NaNs were produced while integrating."
+                " Check the equations for singularities or reduce the time range."
+            )
+        else:
+            detail = f" {message}"
+
+        return base + detail
 
     # Optional: override batch to run in parallel (simple multiprocessing map could be added later)
     def solve_batch(

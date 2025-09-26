@@ -98,7 +98,14 @@ async def submit_job(req: JobRequest, background_tasks: BackgroundTasks):
 def job_status(job_id:str):
     if job_id not in jobs:
         raise HTTPException(404,"job not found")
-    return {"job_id":job_id,"status":jobs[job_id]["status"]}
+    payload = {"job_id": job_id, "status": jobs[job_id]["status"]}
+    if "error" in jobs[job_id]:
+        payload["error"] = jobs[job_id]["error"]
+    if "error_details" in jobs[job_id]:
+        payload["error_details"] = jobs[job_id]["error_details"]
+    if "warnings" in jobs[job_id]:
+        payload["warnings"] = jobs[job_id]["warnings"]
+    return payload
 
 @app.get("/results/{job_id}")
 def job_results(job_id:str):

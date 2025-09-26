@@ -79,6 +79,9 @@ html,body,#root{height:100%;margin:0;padding:0;}
 .actions button[disabled]{opacity:0.5;cursor:not-allowed;background:#9bb7ff;}
 
 .status{font-size:0.9rem;color:var(--muted);}
+.status-error{margin-top:0.5rem;color:#c0392b;font-weight:500;}
+.status-warning{margin-top:0.5rem;padding-left:1.2rem;color:#f39c12;}
+.status-warning li{margin-bottom:0.25rem;}
 
 /* Visualization area */
 .visualization{
