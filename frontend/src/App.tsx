@@ -19,6 +19,8 @@ export default function App() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [results, setResults] = useState<ResultData | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"2D" | "3D">("2D");
   const [xMin, setXMin] = useState<number>(-10);
   const [xMax, setXMax] = useState<number>(10);
@@ -37,10 +39,29 @@ export default function App() {
     try {
       const parsed = typeof msg === "string" ? JSON.parse(msg) : msg;
       if (parsed.type === "status") {
-        setStatus(parsed.payload);
+        const payload = parsed.payload ?? {};
+        if (typeof payload.status === "string") {
+          setStatus(payload.status);
+          if (payload.status === "failed") {
+            setErrorMessage(payload.error ?? "Solver failed to complete the job.");
+          } else {
+            setErrorMessage(null);
+          }
+          if (Array.isArray(payload.warnings)) {
+            setWarnings(payload.warnings.map((w: any) => String(w)));
+          } else if (payload.warning) {
+            setWarnings([String(payload.warning)]);
+          } else {
+            setWarnings([]);
+          }
+        } else {
+          setStatus(String(payload));
+        }
       } else if (parsed.type === "results") {
         setStatus("finished");
         setResults(parsed.payload);
+        setErrorMessage(null);
+        setWarnings([]);
       }
     } catch {
       // fallback: if msg contains raw status
@@ -53,6 +74,8 @@ export default function App() {
     if (jobId) {
       setResults(null);
       setStatus("queued");
+      setErrorMessage(null);
+      setWarnings([]);
     }
   }, [jobId]);
 
@@ -98,6 +121,8 @@ export default function App() {
       const resp = await axios.post("/submit", payload);
       setJobId(resp.data.job_id);
       setStatus("queued");
+      setErrorMessage(null);
+      setWarnings([]);
     } catch (e: any) {
       alert("Submit failed: " + (e?.response?.data || e.message));
     }
@@ -108,9 +133,21 @@ export default function App() {
     try {
       const resp = await axios.get(`/status/${jobId}`);
       setStatus(resp.data.status);
+      if (resp.data.error) {
+        setErrorMessage(resp.data.error);
+      } else {
+        setErrorMessage(null);
+      }
+      if (Array.isArray(resp.data.warnings)) {
+        setWarnings(resp.data.warnings.map((w: any) => String(w)));
+      } else {
+        setWarnings([]);
+      }
       if (resp.data.status === "finished") {
         const resultsResp = await axios.get(`/results/${jobId}`);
         setResults(resultsResp.data);
+        setErrorMessage(null);
+        setWarnings(resultsResp.data?.warnings ?? []);
       }
     } catch (e: any) {
       alert("Status check failed: " + (e?.response?.data || e.message));
@@ -262,6 +299,14 @@ export default function App() {
           <div className="status">
             <strong>Job:</strong> {jobId ?? "—"} <strong>Status:</strong>{" "}
             {status ?? "—"}
+            {errorMessage && <div className="status-error">{errorMessage}</div>}
+            {warnings.length > 0 && (
+              <ul className="status-warning">
+                {warnings.map((w, idx) => (
+                  <li key={idx}>{w}</li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>
 
