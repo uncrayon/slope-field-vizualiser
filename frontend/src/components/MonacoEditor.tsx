@@ -110,7 +110,7 @@ const MonacoEditor: React.FC<MonacoEditorProps> = ({
     if (ed.getValue() !== value) ed.setValue(value);
   }, [value]);
 
-  return <div ref={containerRef} style={{ height, border: "1px solid #ddd" }} />;
+  return <div ref={containerRef} className="monaco-container" style={{ height }} />;
 };
 
 export default MonacoEditor;
