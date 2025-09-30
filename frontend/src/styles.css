@@ -127,22 +127,26 @@ body,
 }
 
 .app-main {
-  flex: 1;
   display: grid;
   grid-template-columns: 400px 1fr;
   gap: var(--gap);
   padding: 28px;
-  align-items: start;
+
+  /* Own the height once, account for header & footer */
+  height: calc(100dvh - var(--header-h) - 56px); /* 56px = .app-footer */
+  align-items: stretch;   /* make both columns fill the row height */
+  overflow: hidden;       /* contain child scrollbars */
 }
 
 .side-panel {
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  max-height: calc(100vh - var(--header-h) - 112px);
-  overflow-y: auto;
-}
 
+  /* remove fixed max-height; allow shrinking inside the grid cell */
+  min-height: 0;
+  overflow: auto;
+}
 .panel {
   background: var(--panel-bg);
   border-radius: var(--radius);
@@ -329,9 +333,13 @@ body,
 }
 
 .visualization {
+  display: flex;          /* keeps header + content vertical */
+  flex-direction: column;
   gap: 18px;
-  min-height: 400px;
-  height: calc(100vh - var(--header-h) - 120px);
+
+  /* remove min-height:400px & fixed height; allow it to shrink */
+  min-height: 0;
+  overflow: auto;
 }
 
 .visualization .panel-header {
