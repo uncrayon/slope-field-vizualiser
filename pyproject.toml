@@ -18,6 +18,7 @@ dependencies = [
   "websockets",
   "python-multipart",
   "aiofiles",
+  "numba"
 ]
 
 [project.optional-dependencies]

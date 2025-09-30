@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import MonacoEditor from "./components/MonacoEditor";
 import PlotlyChart from "./components/PlotlyChart";
 import ThreeScene from "./components/ThreeScene";
+import { StyleControlPanel } from "./components/StyleControlPanel";
 import useWebSocket from "./hooks/useWebSocket";
+import { TrajectoryStyleMap, TrajectoryId, DEFAULT_TRAJECTORY_STYLE, TRAJECTORY_COLOR_PALETTE } from "./types";
+import { extractTrajectoryIds } from "./utils/trajectoryId";
 import "./styles.css";
 
 type ResultData = any;
@@ -21,6 +24,9 @@ export default function App() {
   const [results, setResults] = useState<ResultData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [trajectoryStyles, setTrajectoryStyles] = useState<TrajectoryStyleMap>(new Map());
+  const [selectedTrajectoryId, setSelectedTrajectoryId] = useState<TrajectoryId | null>(null);
+  const [stylePanelExpanded, setStylePanelExpanded] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"2D" | "3D">("2D");
   const [xMin, setXMin] = useState<number>(-10);
   const [xMax, setXMax] = useState<number>(10);
@@ -102,6 +108,47 @@ export default function App() {
     fetchSlopeField();
   }, [equation, xMin, xMax, yMin, yMax, zMin, zMax, viewMode, gridSize]);
 
+  useEffect(() => {
+    if (!results) {
+      return;
+    }
+
+    const trajectoryIds = extractTrajectoryIds(results);
+    
+    setTrajectoryStyles(prevStyles => {
+      const newStyles = new Map(prevStyles);
+      
+      // Add default styles for new trajectories
+      trajectoryIds.forEach((id, index) => {
+        if (!newStyles.has(id)) {
+          const paletteColor = TRAJECTORY_COLOR_PALETTE[index % TRAJECTORY_COLOR_PALETTE.length];
+          newStyles.set(id, {
+            ...DEFAULT_TRAJECTORY_STYLE,
+            color: paletteColor,
+          });
+        }
+      });
+      
+      // Remove styles for trajectories that no longer exist
+      const validIds = new Set(trajectoryIds);
+      for (const id of newStyles.keys()) {
+        if (!validIds.has(id)) {
+          newStyles.delete(id);
+        }
+      }
+      
+      return newStyles;
+    });
+    
+    // Reset selected trajectory if it no longer exists
+    setSelectedTrajectoryId(prev => {
+      if (prev && !trajectoryIds.includes(prev)) {
+        return null;
+      }
+      return prev;
+    });
+  }, [results]);
+
   const submit = async () => {
     try {
       const icLines = icsText
@@ -153,6 +200,52 @@ export default function App() {
       alert("Status check failed: " + (e?.response?.data || e.message));
     }
   };
+
+  const updateTrajectoryStyle = useCallback((trajectoryId: TrajectoryId, updates: Partial<typeof DEFAULT_TRAJECTORY_STYLE>) => {
+    setTrajectoryStyles(prevStyles => {
+      const newStyles = new Map(prevStyles);
+      const currentStyle = newStyles.get(trajectoryId);
+      if (currentStyle) {
+        newStyles.set(trajectoryId, { ...currentStyle, ...updates });
+      }
+      return newStyles;
+    });
+  }, []);
+
+  const resetTrajectoryStyle = useCallback((trajectoryId: TrajectoryId) => {
+    setTrajectoryStyles(prevStyles => {
+      const newStyles = new Map(prevStyles);
+      const styleEntries = Array.from(newStyles.entries());
+      const index = styleEntries.findIndex(([id]) => id === trajectoryId);
+      
+      if (index !== -1) {
+        const paletteColor = TRAJECTORY_COLOR_PALETTE[index % TRAJECTORY_COLOR_PALETTE.length];
+        newStyles.set(trajectoryId, {
+          ...DEFAULT_TRAJECTORY_STYLE,
+          color: paletteColor,
+        });
+      }
+      
+      return newStyles;
+    });
+  }, []);
+
+  const resetAllStyles = useCallback(() => {
+    setTrajectoryStyles(prevStyles => {
+      const newStyles = new Map();
+      const styleEntries = Array.from(prevStyles.entries());
+      
+      styleEntries.forEach(([id], index) => {
+        const paletteColor = TRAJECTORY_COLOR_PALETTE[index % TRAJECTORY_COLOR_PALETTE.length];
+        newStyles.set(id, {
+          ...DEFAULT_TRAJECTORY_STYLE,
+          color: paletteColor,
+        });
+      });
+      
+      return newStyles;
+    });
+  }, []);
 
   return (
     <div className="app">
@@ -379,6 +472,35 @@ export default function App() {
           </section>
         </div>
 
+        {results && results.trajectories && results.trajectories.length > 0 && (
+          <section className="panel style-panel">
+            <div className="panel-header">
+              <h2>Trajectory Styles</h2>
+              <button
+                className="expand-toggle"
+                onClick={() => setStylePanelExpanded(!stylePanelExpanded)}
+                aria-expanded={stylePanelExpanded}
+              >
+                {stylePanelExpanded ? '▼ Collapse' : '▶ Expand'}
+              </button>
+            </div>
+            
+            {stylePanelExpanded && (
+              <StyleControlPanel
+                trajectories={results.trajectories}
+                trajectoryIds={extractTrajectoryIds(results)}
+                initialConditions={results.meta?.initial_conditions}
+                styles={trajectoryStyles}
+                selectedId={selectedTrajectoryId}
+                onSelectTrajectory={setSelectedTrajectoryId}
+                onUpdateStyle={updateTrajectoryStyle}
+                onResetStyle={resetTrajectoryStyle}
+                onResetAll={resetAllStyles}
+              />
+            )}
+          </section>
+        )}
+
         <section className="panel visualization">
           <div className="panel-header">
             <h2>{viewMode === "2D" ? "Phase portrait" : "3D trajectory"}</h2>
@@ -399,6 +521,8 @@ export default function App() {
               yMin={yMin}
               yMax={yMax}
               arrowLength={arrowLength}
+              trajectoryIds={results ? extractTrajectoryIds(results) : undefined}
+              trajectoryStyles={trajectoryStyles}
             />
           )}
 

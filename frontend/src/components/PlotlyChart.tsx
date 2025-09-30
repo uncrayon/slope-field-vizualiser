@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import Plotly from "plotly.js-dist-min";
-import { JobResult } from "../types";
+import { JobResult, TrajectoryId, TrajectoryStyleMap } from "../types";
+import { extractTrajectoryIds } from "../utils/trajectoryId";
 
 type Props = {
   data: JobResult;
@@ -13,9 +14,11 @@ type Props = {
   yMin?: number;
   yMax?: number;
   arrowLength?: number;
+  trajectoryIds?: TrajectoryId[];
+  trajectoryStyles?: TrajectoryStyleMap;
 };
 
-const PlotlyChart: React.FC<Props> = ({ data, xIndex = 0, yIndex = 1, slopeFieldData, showSlopeField = true, xMin = -10, xMax = 10, yMin = -10, yMax = 10, arrowLength = 0.15 }) => {
+const PlotlyChart: React.FC<Props> = ({ data, xIndex = 0, yIndex = 1, slopeFieldData, showSlopeField = true, xMin = -10, xMax = 10, yMin = -10, yMax = 10, arrowLength = 0.15, trajectoryIds, trajectoryStyles }) => {
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -24,11 +27,21 @@ const PlotlyChart: React.FC<Props> = ({ data, xIndex = 0, yIndex = 1, slopeField
       const x = traj.map((p) => (p.length > xIndex ? p[xIndex] : 0));
       const y = traj.map((p) => (p.length > yIndex ? p[yIndex] : 0));
       const condition = data.meta?.initial_conditions?.[i]?.join(', ') || `traj ${i}`;
+      
+      // Get custom style for this trajectory
+      const trajectoryId = trajectoryIds?.[i];
+      const style = trajectoryId ? trajectoryStyles?.get(trajectoryId) : undefined;
+      
       return {
         x,
         y,
-        mode: "lines",
+        mode: "lines" as const,
         name: condition,
+        line: style ? {
+          color: style.color,
+          width: style.width,
+          dash: style.dash,
+        } : undefined,
       };
     });
 
@@ -81,7 +94,7 @@ const PlotlyChart: React.FC<Props> = ({ data, xIndex = 0, yIndex = 1, slopeField
         Plotly.purge(ref.current!);
       } catch {}
     };
-  }, [data, xIndex, yIndex, slopeFieldData, showSlopeField, xMin, xMax, yMin, yMax, arrowLength]);
+  }, [data, xIndex, yIndex, slopeFieldData, showSlopeField, xMin, xMax, yMin, yMax, arrowLength, trajectoryIds, trajectoryStyles]);
 
   return <div ref={ref} style={{ width: "100%", height: "100%" }} />;
 };
