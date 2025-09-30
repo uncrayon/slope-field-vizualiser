@@ -129,6 +129,10 @@ body,
 .app-main {
   display: grid;
   grid-template-columns: 400px 1fr;
+  grid-template-areas:
+    "sidebar viz"
+    "sidebar styles";
+  grid-auto-rows: minmax(0, auto);
   gap: var(--gap);
   padding: 28px;
 
@@ -146,6 +150,7 @@ body,
   /* remove fixed max-height; allow shrinking inside the grid cell */
   min-height: 0;
   overflow: auto;
+  grid-area: sidebar;
 }
 .panel {
   background: var(--panel-bg);
@@ -340,6 +345,7 @@ body,
   /* remove min-height:400px & fixed height; allow it to shrink */
   min-height: 0;
   overflow: auto;
+  grid-area: viz;
 }
 
 .visualization .panel-header {
@@ -378,14 +384,13 @@ body,
 @media (max-width: 1200px) {
   .app-main {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .side-panel {
-    order: 2;
+    grid-template-areas:
+      "viz"
+      "sidebar"
+      "styles";
   }
 
   .visualization {
-    order: 1;
     height: 420px;
   }
 }
@@ -422,6 +427,7 @@ body,
 /* Panel Structure */
 .style-panel {
   margin-top: 1rem;
+  grid-area: styles;
 }
 
 .style-panel .panel-header {
