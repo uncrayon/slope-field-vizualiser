@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import Plotly from "plotly.js-dist-min";
-import { JobResult } from "../types";
+import { JobResult, TrajectoryStyles } from "../types";
 
 type Props = {
   data: JobResult;
@@ -13,9 +13,10 @@ type Props = {
   yMin?: number;
   yMax?: number;
   arrowLength?: number;
+  trajectoryStyles?: TrajectoryStyles;
 };
 
-const PlotlyChart: React.FC<Props> = ({ data, xIndex = 0, yIndex = 1, slopeFieldData, showSlopeField = true, xMin = -10, xMax = 10, yMin = -10, yMax = 10, arrowLength = 0.15 }) => {
+const PlotlyChart: React.FC<Props> = ({ data, xIndex = 0, yIndex = 1, slopeFieldData, showSlopeField = true, xMin = -10, xMax = 10, yMin = -10, yMax = 10, arrowLength = 0.15, trajectoryStyles }) => {
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -24,11 +25,23 @@ const PlotlyChart: React.FC<Props> = ({ data, xIndex = 0, yIndex = 1, slopeField
       const x = traj.map((p) => (p.length > xIndex ? p[xIndex] : 0));
       const y = traj.map((p) => (p.length > yIndex ? p[yIndex] : 0));
       const condition = data.meta?.initial_conditions?.[i]?.join(', ') || `traj ${i}`;
+      const style = trajectoryStyles?.[i.toString()] || { color: undefined, lineStyle: 'solid' as const, width: 2 };
+      const dashMap = {
+        solid: 'solid',
+        dashed: 'dash',
+        dashdot: 'dashdot',
+        dotted: 'dot'
+      };
       return {
         x,
         y,
         mode: "lines",
         name: condition,
+        line: {
+          color: style.color,
+          width: style.width,
+          dash: dashMap[style.lineStyle]
+        }
       };
     });
 
@@ -81,7 +94,7 @@ const PlotlyChart: React.FC<Props> = ({ data, xIndex = 0, yIndex = 1, slopeField
         Plotly.purge(ref.current!);
       } catch {}
     };
-  }, [data, xIndex, yIndex, slopeFieldData, showSlopeField, xMin, xMax, yMin, yMax, arrowLength]);
+  }, [data, xIndex, yIndex, slopeFieldData, showSlopeField, xMin, xMax, yMin, yMax, arrowLength, trajectoryStyles]);
 
   return <div ref={ref} style={{ width: "100%", height: "100%" }} />;
 };

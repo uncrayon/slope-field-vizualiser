@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import MonacoEditor from "./components/MonacoEditor";
 import PlotlyChart from "./components/PlotlyChart";
 import ThreeScene from "./components/ThreeScene";
+import TrajectoryStylePanel from "./components/TrajectoryStylePanel";
 import useWebSocket from "./hooks/useWebSocket";
+import { TrajectoryStyles, TrajectoryStyle } from "./types";
 import "./styles.css";
 
 type ResultData = any;
@@ -32,6 +34,14 @@ export default function App() {
   const [slopeFieldData, setSlopeFieldData] = useState<any>(null);
   const [gridSize, setGridSize] = useState<number>(30);
   const [arrowLength, setArrowLength] = useState<number>(0.15);
+  const [trajectoryStyles, setTrajectoryStyles] = useState<TrajectoryStyles>(() => {
+    try {
+      const saved = localStorage.getItem('trajectoryStyles');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
   // WebSocket hook will connect and forward messages for the current jobId
   useWebSocket(jobId, (msg) => {
@@ -101,6 +111,35 @@ export default function App() {
     };
     fetchSlopeField();
   }, [equation, xMin, xMax, yMin, yMax, zMin, zMax, viewMode, gridSize]);
+
+  useEffect(() => {
+    localStorage.setItem('trajectoryStyles', JSON.stringify(trajectoryStyles));
+  }, [trajectoryStyles]);
+
+  const handleStyleChange = useCallback((index: string, style: Partial<TrajectoryStyle>) => {
+    setTrajectoryStyles(prev => ({
+      ...prev,
+      [index]: { ...prev[index], ...style }
+    }));
+  }, []);
+
+  const handleResetAll = useCallback(() => {
+    setTrajectoryStyles({});
+  }, []);
+
+  const handleImport = useCallback((styles: TrajectoryStyles) => {
+    setTrajectoryStyles(styles);
+  }, []);
+
+  const handleExport = useCallback(() => {
+    const dataStr = JSON.stringify(trajectoryStyles, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = 'trajectory-styles.json';
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  }, [trajectoryStyles]);
 
   const submit = async () => {
     try {
@@ -399,6 +438,7 @@ export default function App() {
               yMin={yMin}
               yMax={yMax}
               arrowLength={arrowLength}
+              trajectoryStyles={trajectoryStyles}
             />
           )}
 
@@ -406,6 +446,20 @@ export default function App() {
 
           {!results && viewMode === "3D" && (
             <div className="placeholder">No results yet</div>
+          )}
+
+          {viewMode === "2D" && results && results.trajectories && results.trajectories.length > 0 && (
+            <TrajectoryStylePanel
+              trajectoryStyles={trajectoryStyles}
+              onStyleChange={handleStyleChange}
+              onResetAll={handleResetAll}
+              onExport={handleExport}
+              onImport={handleImport}
+              trajectoryCount={results.trajectories.length}
+              trajectoryNames={results.trajectories.map((_: any, i: number) =>
+                results.meta?.initial_conditions?.[i]?.join(', ') || `Trajectory ${i + 1}`
+              )}
+            />
           )}
         </section>
       </main>
