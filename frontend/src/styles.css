@@ -689,3 +689,19 @@ body,
     min-width: 60px;
   }
 }
+
+/* Resize Handle Styles */
+.plot-container.dragging {
+  box-shadow: 0 0 10px rgba(0, 112, 243, 0.3);
+  border-color: rgba(0, 112, 243, 0.5);
+}
+
+.resize-handle:hover {
+  border-color: var(--accent);
+  background: rgba(0, 112, 243, 0.1);
+}
+
+.resize-handle:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

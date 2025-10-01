@@ -42,6 +42,17 @@ export default function App() {
       return {};
     }
   });
+  const [plotHeight, setPlotHeight] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('plotHeight');
+      return saved ? parseInt(saved, 10) : 600;
+    } catch {
+      return 600;
+    }
+  });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [startY, setStartY] = useState<number>(0);
+  const [initialHeight, setInitialHeight] = useState<number>(600);
 
   // WebSocket hook will connect and forward messages for the current jobId
   useWebSocket(jobId, (msg) => {
@@ -116,6 +127,10 @@ export default function App() {
     localStorage.setItem('trajectoryStyles', JSON.stringify(trajectoryStyles));
   }, [trajectoryStyles]);
 
+  useEffect(() => {
+    localStorage.setItem('plotHeight', plotHeight.toString());
+  }, [plotHeight]);
+
   const handleStyleChange = useCallback((index: string, style: Partial<TrajectoryStyle>) => {
     setTrajectoryStyles(prev => ({
       ...prev,
@@ -140,6 +155,47 @@ export default function App() {
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
   }, [trajectoryStyles]);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent, type: 'mouse' | 'touch') => {
+    e.preventDefault();
+    setIsDragging(true);
+    setInitialHeight(plotHeight);
+    const clientY = type === 'mouse' ? (e as React.MouseEvent).clientY : (e as React.TouchEvent).touches[0].clientY;
+    setStartY(clientY);
+  }, [plotHeight]);
+
+  const handleResizeMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!isDragging) return;
+    const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY;
+    const deltaY = clientY - startY;
+    const newHeight = Math.max(300, initialHeight + deltaY);
+    setPlotHeight(newHeight);
+  }, [isDragging, startY, initialHeight]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      const handleMouseMove = (e: MouseEvent) => handleResizeMove(e);
+      const handleTouchMove = (e: TouchEvent) => handleResizeMove(e);
+      const handleMouseUp = () => handleResizeEnd();
+      const handleTouchEnd = () => handleResizeEnd();
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('touchmove', handleTouchMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchend', handleTouchEnd);
+
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('touchend', handleTouchEnd);
+      };
+    }
+  }, [isDragging, handleResizeMove, handleResizeEnd]);
 
   const submit = async () => {
     try {
@@ -418,7 +474,7 @@ export default function App() {
           </section>
         </div>
 
-        <section className="panel visualization">
+        <section className="panel visualization" style={{ height: plotHeight }}>
           <div className="panel-header">
             <h2>{viewMode === "2D" ? "Phase portrait" : "3D trajectory"}</h2>
             <p>
@@ -429,17 +485,46 @@ export default function App() {
           </div>
 
           {viewMode === "2D" && (
-            <PlotlyChart
-              data={results || { trajectories: [], meta: {} }}
-              slopeFieldData={slopeFieldData}
-              showSlopeField={showSlopeField}
-              xMin={xMin}
-              xMax={xMax}
-              yMin={yMin}
-              yMax={yMax}
-              arrowLength={arrowLength}
-              trajectoryStyles={trajectoryStyles}
-            />
+            <div className={`plot-container user-select-none svg-container ${isDragging ? 'dragging' : ''}`} style={{ position: 'relative', height: 'calc(100% - 60px)' }}>
+              <PlotlyChart
+                data={results || { trajectories: [], meta: {} }}
+                slopeFieldData={slopeFieldData}
+                showSlopeField={showSlopeField}
+                xMin={xMin}
+                xMax={xMax}
+                yMin={yMin}
+                yMax={yMax}
+                arrowLength={arrowLength}
+                trajectoryStyles={trajectoryStyles}
+              />
+              <div
+                className="resize-handle"
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  width: '44px',
+                  height: '44px',
+                  cursor: 'ns-resize',
+                  background: 'transparent',
+                  borderBottom: '2px solid var(--accent)',
+                  borderLeft: '2px solid var(--accent)',
+                  borderBottomLeftRadius: '4px',
+                }}
+                onMouseDown={(e) => handleResizeStart(e, 'mouse')}
+                onTouchStart={(e) => handleResizeStart(e, 'touch')}
+                aria-label="Resize plot height"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowUp') {
+                    setPlotHeight(prev => Math.max(300, prev - 10));
+                  } else if (e.key === 'ArrowDown') {
+                    setPlotHeight(prev => prev + 10);
+                  }
+                }}
+              />
+            </div>
           )}
 
           {viewMode === "3D" && results && <ThreeScene data={results} />}

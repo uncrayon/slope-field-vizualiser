@@ -21,6 +21,17 @@ const PlotlyChart: React.FC<Props> = ({ data, xIndex = 0, yIndex = 1, slopeField
 
   useEffect(() => {
     if (!ref.current) return;
+    const resizeObserver = new ResizeObserver(() => {
+      try {
+        Plotly.Plots.resize(ref.current!);
+      } catch {}
+    });
+    resizeObserver.observe(ref.current);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!ref.current) return;
     const traces = (data.trajectories || []).map((traj, i) => {
       const x = traj.map((p) => (p.length > xIndex ? p[xIndex] : 0));
       const y = traj.map((p) => (p.length > yIndex ? p[yIndex] : 0));
