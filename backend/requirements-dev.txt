@@ -18,3 +18,4 @@ pytest-asyncio
 black
 isort
 mypy
+requests
