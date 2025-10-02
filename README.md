@@ -1,4 +1,52 @@
 # Equation Phase Portrait Tool
+[![PyPI version](https://img.shields.io/pypi/v/equation-phase-portrait-tool.svg)](https://pypi.org/project/equation-phase-portrait-tool/)
+
+## Install
+
+Install from PyPI:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install equation-phase-portrait-tool
+```
+
+Quick import / run (after installation):
+
+```python
+import equation_phase_portrait_tool
+print(equation_phase_portrait_tool.__version__)
+# run the bundled server CLI:
+# eqpp-server --help
+# or
+# python -m equation_phase_portrait_tool
+```
+
+
+## Release & Packaging
+
+This repository can be published to PyPI as the package name `equation-phase-portrait-tool` and exposes the import package `equation_phase_portrait_tool`. Basic release steps:
+
+1. Update the version in `equation_phase_portrait_tool/_version.py` (single source of truth).
+2. Locally build distributions:
+   - python -m pip install --upgrade build
+   - python -m build --sdist --wheel
+3. Test install from local dist:
+   - python -m pip install dist/your_package-0.1.0-py3-none-any.whl
+4. Test CLI:
+   - eqpp-server --help
+   - python -m equation_phase_portrait_tool.__main__ --help
+5. Publish to TestPyPI:
+   - python -m pip install --upgrade twine
+   - python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+6. If TestPyPI verification passes, publish to PyPI:
+   - python -m twine upload dist/*
+
+Notes:
+- The project uses setuptools (PEP 621) with console script `equation-phase-portrait-tool = "equation_phase_portrait_tool.__main__:main"`.
+- Static assets under `backend/static` are included in sdists/wheels; development artefacts (backend/jobs.sqlite, backend/worker_runs.log) are excluded.
+- CI workflow `.github/workflows/release.yml` builds/tests on push to main and publishes when a tag `v*` is pushed.
+
+
 
 Professional ODE exploration web service: parser, solvers, visualization, REST + WebSocket API.
 

@@ -22,16 +22,21 @@ dependencies = [
 
 [project.optional-dependencies]
 numba = ["numba"]
+dev = ["build", "twine", "wheel", "pytest", "pytest-asyncio", "requests"]
 
 [project.scripts]
 eqpp-server = "backend.cli:main"
+equation-phase-portrait-tool = "equation_phase_portrait_tool.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["backend*"]
+include = ["backend*", "equation_phase_portrait_tool*"]
 
 [tool.setuptools.package-data]
 "backend" = ["static/**"]
+
+[tool.setuptools.exclude-package-data]
+"backend" = ["jobs.sqlite", "worker_runs.log"]
 
 [tool.setuptools]
 include-package-data = true
