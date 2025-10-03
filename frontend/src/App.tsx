@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import axios from "axios";
 import MonacoEditor from "./components/MonacoEditor";
 import PlotlyChart from "./components/PlotlyChart";
@@ -12,18 +12,18 @@ type ResultData = any;
 
 export default function App() {
   const [equation, setEquation] = useState<string>(
-    "{x'[t], y'[t]} == {x[t] - y[t], x[t]*y[t]}"
+    "{x'[t], y'[t], z'[t]} == {10*(y[t] - x[t]), x[t]*(28 - z[t]) - y[t], x[t]*y[t] - (8/3)*z[t]}"
   );
   const [name, setName] = useState<string>("");
   const [t0, setT0] = useState<number>(0);
-  const [tf, setTf] = useState<number>(10);
-  const [icsText, setIcsText] = useState<string>("1,0\n0.5,0.5");
+  const [tf, setTf] = useState<number>(20);
+  const [icsText, setIcsText] = useState<string>("10,10,10\n11,11,11");
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [results, setResults] = useState<ResultData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"2D" | "3D">("2D");
+  const [viewMode, setViewMode] = useState<"2D" | "3D">("3D");
   const [xMin, setXMin] = useState<number>(-10);
   const [xMax, setXMax] = useState<number>(10);
   const [yMin, setYMin] = useState<number>(-10);
@@ -54,6 +54,35 @@ export default function App() {
   const [startY, setStartY] = useState<number>(0);
   const [initialHeight, setInitialHeight] = useState<number>(600);
 
+  const systemDimensionFromICs = useMemo(() => {
+    try {
+      const lengths = icsText
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => line.split(",").map((x) => x.trim()).filter(Boolean).length)
+        .filter((len) => len > 0);
+      if (lengths.length === 0) return null;
+      const first = lengths[0];
+      if (lengths.some((len) => len !== first)) return null;
+      return first;
+    } catch {
+      return null;
+    }
+  }, [icsText]);
+
+  const systemDimensionFromResults = useMemo(() => {
+    if (!results || !Array.isArray(results.trajectories) || results.trajectories.length === 0) {
+      return null;
+    }
+    const sample = results.trajectories[0]?.[0];
+    if (!Array.isArray(sample)) return null;
+    return sample.length;
+  }, [results]);
+
+  const systemDimension = systemDimensionFromResults ?? systemDimensionFromICs;
+  const isLikely3DSystem = Boolean(systemDimension && systemDimension > 2);
+
   // WebSocket hook will connect and forward messages for the current jobId
   useWebSocket(jobId, (msg) => {
     // expected message shape: { type: 'status' | 'results', payload: ... }
@@ -79,6 +108,7 @@ export default function App() {
           setStatus(String(payload));
         }
       } else if (parsed.type === "results") {
+        console.log("App: Received results:", parsed.payload);
         setStatus("finished");
         setResults(parsed.payload);
         setErrorMessage(null);
@@ -102,7 +132,14 @@ export default function App() {
 
   useEffect(() => {
     const fetchSlopeField = async () => {
-      if (!equation.trim()) return;
+      if (!equation.trim() || viewMode === "3D" || isLikely3DSystem) {
+        console.log("Skipping slope field fetch", {
+          equation: equation.trim(),
+          viewMode,
+          isLikely3DSystem,
+        });
+        return;
+      }
       try {
         const payload = {
           equations: equation,
@@ -111,17 +148,28 @@ export default function App() {
           y_min: yMin,
           y_max: yMax,
           grid_size: gridSize,
-          ...(viewMode === "3D" ? { z_min: zMin, z_max: zMax } : {}),
         };
+        console.log("Sending 2D slope field request:", payload);
         const resp = await axios.post("/slope_field", payload);
+        console.log("Slope field response:", resp.data);
         setSlopeFieldData(resp.data);
       } catch (e: any) {
         console.error("Slope field fetch failed:", e);
+        console.error("Error response:", e.response?.data);
         setSlopeFieldData(null);
       }
     };
     fetchSlopeField();
-  }, [equation, xMin, xMax, yMin, yMax, zMin, zMax, viewMode, gridSize]);
+  }, [equation, xMin, xMax, yMin, yMax, viewMode, gridSize, isLikely3DSystem]);
+
+  useEffect(() => {
+    if (isLikely3DSystem && showSlopeField) {
+      setShowSlopeField(false);
+    }
+    if (isLikely3DSystem) {
+      setSlopeFieldData(null);
+    }
+  }, [isLikely3DSystem, showSlopeField]);
 
   useEffect(() => {
     localStorage.setItem('trajectoryStyles', JSON.stringify(trajectoryStyles));
@@ -239,7 +287,9 @@ export default function App() {
         setWarnings([]);
       }
       if (resp.data.status === "finished") {
+        console.log("App: Job finished, fetching results");
         const resultsResp = await axios.get(`/results/${jobId}`);
+        console.log("App: Fetched results:", resultsResp.data);
         setResults(resultsResp.data);
         setErrorMessage(null);
         setWarnings(resultsResp.data?.warnings ?? []);
@@ -445,9 +495,15 @@ export default function App() {
                   type="checkbox"
                   checked={showSlopeField}
                   onChange={(e) => setShowSlopeField(e.target.checked)}
+                  disabled={isLikely3DSystem}
                 />
                 <span>Show slope field overlay</span>
               </label>
+              {isLikely3DSystem && (
+                <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                  Slope field overlay is available for 2D systems.
+                </span>
+              )}
             </div>
 
             <div className="actions">
@@ -527,7 +583,12 @@ export default function App() {
             </div>
           )}
 
-          {viewMode === "3D" && results && <ThreeScene data={results} />}
+          {viewMode === "3D" && results && (
+            <>
+              {console.log("App: Rendering 3D scene with results:", results)}
+              <ThreeScene data={results} />
+            </>
+          )}
 
           {!results && viewMode === "3D" && (
             <div className="placeholder">No results yet</div>

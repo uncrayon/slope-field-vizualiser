@@ -15,6 +15,7 @@ const ThreeScene: React.FC<Props> = ({ data, width = "100%", height = "100%", po
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rafRef = useRef<number | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -71,6 +72,10 @@ const ThreeScene: React.FC<Props> = ({ data, width = "100%", height = "100%", po
     };
     window.addEventListener("resize", handleResize);
 
+    const resizeObserver = new ResizeObserver(() => handleResize());
+    resizeObserver.observe(container);
+    resizeObserverRef.current = resizeObserver;
+
     const animate = () => {
       if (sceneRef.current) {
         sceneRef.current.rotation.x = rotX;
@@ -87,6 +92,12 @@ const ThreeScene: React.FC<Props> = ({ data, width = "100%", height = "100%", po
       window.removeEventListener("mouseup", onMouseUp);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("resize", handleResize);
+      if (resizeObserverRef.current) {
+        try {
+          resizeObserverRef.current.disconnect();
+        } catch {}
+        resizeObserverRef.current = null;
+      }
       try {
         renderer.dispose();
         rendererRef.current = null;
@@ -99,7 +110,18 @@ const ThreeScene: React.FC<Props> = ({ data, width = "100%", height = "100%", po
   // create/update trajectories in scene
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene) return;
+    if (!scene) {
+      console.log("ThreeScene: No scene available");
+      return;
+    }
+    
+    console.log("ThreeScene: Updating with data:", data);
+    console.log("ThreeScene: Trajectories count:", data.trajectories?.length || 0);
+    
+    if (!data.trajectories || data.trajectories.length === 0) {
+      console.log("ThreeScene: No trajectories to render");
+      return;
+    }
 
     // remove previous trajectories
     const prev = scene.getObjectByName("trajectories");
@@ -126,11 +148,15 @@ const ThreeScene: React.FC<Props> = ({ data, width = "100%", height = "100%", po
     const bboxMax = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
 
     data.trajectories?.forEach((traj, ti) => {
+      console.log(`ThreeScene: Processing trajectory ${ti} with ${traj.length} points`);
       // create a line geometry for the trajectory (up to 3 dims; if less, pad with 0)
-      const pts: THREE.Vector3[] = traj.map((p) => {
+      const pts: THREE.Vector3[] = traj.map((p, pi) => {
         const x = p.length > 0 ? p[0] : 0;
         const y = p.length > 1 ? p[1] : 0;
         const z = p.length > 2 ? p[2] : 0;
+        if (pi === 0 || pi === traj.length - 1) {
+          console.log(`ThreeScene: Point ${pi}: [${x}, ${y}, ${z}]`);
+        }
         bboxMin.min(new THREE.Vector3(x, y, z));
         bboxMax.max(new THREE.Vector3(x, y, z));
         return new THREE.Vector3(x, y, z);
@@ -155,22 +181,44 @@ const ThreeScene: React.FC<Props> = ({ data, width = "100%", height = "100%", po
       }
     });
 
+    const center = new THREE.Vector3().addVectors(bboxMin, bboxMax).multiplyScalar(0.5);
+    const size = new THREE.Vector3().subVectors(bboxMax, bboxMin);
+    const maxExtent = Math.max(size.x, size.y, size.z, 1e-6);
+    const desiredExtent = 8; // target scene span to keep trajectories inside view
+    const scale = Math.min(Math.max(desiredExtent / maxExtent, 1e-4), 100);
+
+    group.scale.setScalar(scale);
+    group.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+
     scene.add(group);
 
-    // adjust camera to frame bbox
+    // adjust camera to frame the scaled, centered group
     const camera = cameraRef.current;
     if (camera) {
-      const center = new THREE.Vector3().addVectors(bboxMin, bboxMax).multiplyScalar(0.5);
-      const size = new THREE.Vector3().subVectors(bboxMax, bboxMin);
-      const maxSize = Math.max(size.x, size.y, size.z, 1e-3);
-      const distance = maxSize * 1.5 + 1;
-      camera.position.set(center.x, center.y, center.z + distance);
-      camera.lookAt(center);
+      const scaledSize = maxExtent * scale;
+      const radius = Math.max(scaledSize * 0.5, 0.5);
+      const distance = radius * 2.2 + 2;
+      camera.position.set(0, 0, distance);
+      camera.near = Math.max(radius * 0.01, 0.01);
+      camera.far = Math.max(distance * 4, radius * 4, 20);
+      camera.lookAt(new THREE.Vector3(0, 0, 0));
       camera.updateProjectionMatrix();
     }
   }, [data, pointSize]);
 
-  return <div ref={containerRef} style={{ width, height, border: "1px solid #ddd" }} />;
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        width,
+        height,
+        border: "1px solid #ddd",
+        flex: 1,
+        minHeight: 0,
+        position: "relative",
+      }}
+    />
+  );
 };
 
 export default ThreeScene;

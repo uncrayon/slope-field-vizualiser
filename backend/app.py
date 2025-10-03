@@ -116,9 +116,11 @@ def job_results(job_id:str):
 @app.post("/slope_field")
 def compute_slope_field(req: SlopeFieldRequest):
     try:
+        logger.info(f"Slope field request: equations={req.equations}, x_min={req.x_min}, x_max={req.x_max}, y_min={req.y_min}, y_max={req.y_max}, z_min={req.z_min}, z_max={req.z_max}, grid_size={req.grid_size}")
         parser = MathematicaParser()
         f, state_vars = parser.parse(req.equations)
         num_vars = len(state_vars)
+        logger.info(f"Parsed equations: num_vars={num_vars}, state_vars={state_vars}")
         if num_vars == 2:
             # 2D
             x = np.linspace(req.x_min, req.x_max, req.grid_size)
@@ -140,6 +142,7 @@ def compute_slope_field(req: SlopeFieldRequest):
             }
         elif num_vars == 3 and req.z_min is not None and req.z_max is not None:
             # 3D
+            logger.info("Computing 3D slope field")
             x = np.linspace(req.x_min, req.x_max, req.grid_size)
             y = np.linspace(req.y_min, req.y_max, req.grid_size)
             z = np.linspace(req.z_min, req.z_max, req.grid_size)
@@ -164,19 +167,25 @@ def compute_slope_field(req: SlopeFieldRequest):
                 "w": W
             }
         else:
-            raise HTTPException(400, "Unsupported number of variables or missing z range for 3D")
+            logger.error(f"Unsupported configuration: num_vars={num_vars}, z_min={req.z_min}, z_max={req.z_max}")
+            raise HTTPException(400, f"Unsupported number of variables or missing z range for 3D. num_vars={num_vars}, z_min={req.z_min}, z_max={req.z_max}")
     except Exception as e:
+        logger.error(f"Error computing slope field: {str(e)}")
         raise HTTPException(400, str(e))
 
 @app.websocket("/ws/{job_id}")
 async def ws_endpoint(websocket: WebSocket, job_id:str):
-    await websocket.accept()
-    await websocket.send_json({"status":"connected","job_id":job_id})
-    # naive: send updates if job exists
-    import asyncio
-    while True:
-        if job_id in jobs and jobs[job_id]["status"]=="finished":
-            await websocket.send_json({"status":"finished","result":jobs[job_id].get("result")})
-            break
-        await asyncio.sleep(0.5)
-    await websocket.close()
+    try:
+        await websocket.accept()
+        await websocket.send_json({"status":"connected","job_id":job_id})
+        # naive: send updates if job exists
+        import asyncio
+        while True:
+            if job_id in jobs and jobs[job_id]["status"]=="finished":
+                await websocket.send_json({"status":"finished","result":jobs[job_id].get("result")})
+                break
+            await asyncio.sleep(0.5)
+        await websocket.close()
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        pass

@@ -57,38 +57,45 @@ const PlotlyChart: React.FC<Props> = ({ data, xIndex = 0, yIndex = 1, slopeField
     });
 
     if (showSlopeField && slopeFieldData) {
-      const lineX: any[] = [];
-      const lineY: any[] = [];
-      for (let i = 0; i < slopeFieldData.x.length; i++) {
-        const x = slopeFieldData.x[i];
-        const y = slopeFieldData.y[i];
-        const u = slopeFieldData.u[i];
-        const v = slopeFieldData.v[i];
-        const mag = Math.sqrt(u * u + v * v);
-        if (mag > 1e-6) { // avoid zero vectors
-          // Normalize and scale
-          const uNorm = (u / mag) * arrowLength;
-          const vNorm = (v / mag) * arrowLength;
-          // Draw arrow from start to end
-          lineX.push(x, x + uNorm, null);
-          lineY.push(y, y + vNorm, null);
+      // Check if this is 3D slope field data
+      if (slopeFieldData.z !== undefined) {
+        console.log("3D slope field data detected but not supported in 2D plot");
+        // Don't try to render 3D slope field in 2D plot
+      } else {
+        // 2D slope field rendering
+        const lineX: any[] = [];
+        const lineY: any[] = [];
+        for (let i = 0; i < slopeFieldData.x.length; i++) {
+          const x = slopeFieldData.x[i];
+          const y = slopeFieldData.y[i];
+          const u = slopeFieldData.u[i];
+          const v = slopeFieldData.v[i];
+          const mag = Math.sqrt(u * u + v * v);
+          if (mag > 1e-6) { // avoid zero vectors
+            // Normalize and scale
+            const uNorm = (u / mag) * arrowLength;
+            const vNorm = (v / mag) * arrowLength;
+            // Draw arrow from start to end
+            lineX.push(x, x + uNorm, null);
+            lineY.push(y, y + vNorm, null);
+          }
         }
+        // Single trace with lines and arrowheads
+        traces.push({
+          x: lineX,
+          y: lineY,
+          mode: "lines+markers",
+          line: { color: "gray", width: 1 },
+          marker: {
+            symbol: "arrow",
+            size: 8,
+            angleref: "previous",
+            color: "gray",
+          },
+          name: "Slope Field",
+          showlegend: false,
+        } as any);
       }
-      // Single trace with lines and arrowheads
-      traces.push({
-        x: lineX,
-        y: lineY,
-        mode: "lines+markers",
-        line: { color: "gray", width: 1 },
-        marker: {
-          symbol: "arrow",
-          size: 8,
-          angleref: "previous",
-          color: "gray",
-        },
-        name: "Slope Field",
-        showlegend: false,
-      } as any);
     }
 
     const layout = {
